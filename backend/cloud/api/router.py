@@ -458,8 +458,117 @@ async def get_inventory(
 
 
 # ---------------------------------------------------------------------------
+# Logistics Audit Summary  (hardcoded until DB schema is extended)
+# ---------------------------------------------------------------------------
+
+_LOGISTICS_AUDIT: dict = {
+    "maitri": {
+        "food": {
+            "total_items": 3,
+            "items": [
+                {"item_id": "maitri.food.dry_rations",    "name": "Dry Rations (2026 Stock)",   "current_stock": 4800,   "unit": "kg",         "reorder_qty": 1200,  "min_safe": 500,   "daily_use": "19.2 kg/day",   "days_left": 250, "status": "SAFE"},
+                {"item_id": "maitri.food.frozen",         "name": "Frozen Food Stock",           "current_stock": 2100,   "unit": "kg",         "reorder_qty": 900,   "min_safe": 300,   "daily_use": "8.4 kg/day",    "days_left": 250, "status": "SAFE"},
+                {"item_id": "maitri.food.emergency_pack", "name": "Emergency Food Packs",        "current_stock": 150,    "unit": "packs",      "reorder_qty": 50,    "min_safe": 30,    "daily_use": "0 packs/day",   "days_left": 365, "status": "SAFE"},
+            ],
+            "audit": {"last_verified_by": "Maitri Station Commander", "last_verified_at": "2026-09-15T08:00:00Z", "verified": True, "pending_maitri": False, "pending_bharati": True},
+        },
+        "fuel": {
+            "total_items": 2,
+            "items": [
+                {"item_id": "maitri.fuel.aviation",       "name": "Aviation Turbine Fuel (ATF)", "current_stock": 12400,  "unit": "litres",     "reorder_qty": 8000,  "min_safe": 3000,  "daily_use": "48 litres/day", "days_left": 258, "status": "SAFE"},
+                {"item_id": "maitri.fuel.diesel_main",    "name": "Diesel Fuel (Main Reserve)",  "current_stock": 136800, "unit": "litres",     "reorder_qty": 60000, "min_safe": 40000, "daily_use": "530 litres/day","days_left": 258, "status": "SAFE"},
+            ],
+            "audit": {"last_verified_by": "Maitri Station Commander", "last_verified_at": "2026-09-15T08:00:00Z", "verified": True, "pending_maitri": False, "pending_bharati": True},
+        },
+        "medical": {
+            "total_items": 2,
+            "items": [
+                {"item_id": "maitri.med.emergency_kit",   "name": "Emergency Medical Kit",       "current_stock": 8,      "unit": "kits",       "reorder_qty": 2,     "min_safe": 2,     "daily_use": "N/A",           "days_left": 365, "status": "SAFE"},
+                {"item_id": "maitri.med.oxygen_tanks",    "name": "Oxygen Cylinders",            "current_stock": 24,     "unit": "cylinders",  "reorder_qty": 12,    "min_safe": 6,     "daily_use": "N/A",           "days_left": 365, "status": "SAFE"},
+            ],
+            "audit": {"last_verified_by": "Station Medical Officer", "last_verified_at": "2026-09-10T10:00:00Z", "verified": True, "pending_maitri": False, "pending_bharati": True},
+        },
+        "spares": {
+            "total_items": 5,
+            "items": [
+                {"item_id": "maitri.spare.generator_parts",  "name": "Generator Spare Parts",       "current_stock": 1,      "unit": "set",        "reorder_qty": 1,     "min_safe": 1,     "daily_use": "N/A",           "days_left": 365, "status": "SAFE"},
+                {"item_id": "maitri.spare.snowcat_tracks",   "name": "Snow Cat Tracks",             "current_stock": 4,      "unit": "units",      "reorder_qty": 2,     "min_safe": 2,     "daily_use": "N/A",           "days_left": 365, "status": "SAFE"},
+                {"item_id": "maitri.spare.hydraulic_fluid",  "name": "Hydraulic Fluid",             "current_stock": 200,    "unit": "litres",     "reorder_qty": 100,   "min_safe": 50,    "daily_use": "N/A",           "days_left": 365, "status": "SAFE"},
+                {"item_id": "maitri.spare.heating_cables",   "name": "Heating Cables (50m)",        "current_stock": 10,     "unit": "rolls",      "reorder_qty": 5,     "min_safe": 3,     "daily_use": "N/A",           "days_left": 365, "status": "SAFE"},
+                {"item_id": "maitri.spare.comm_modules",     "name": "VSAT Communication Modules",  "current_stock": 3,      "unit": "units",      "reorder_qty": 2,     "min_safe": 1,     "daily_use": "N/A",           "days_left": 365, "status": "SAFE"},
+            ],
+            "audit": {"last_verified_by": "Maitri Technical Officer", "last_verified_at": "2026-09-12T09:00:00Z", "verified": True, "pending_maitri": False, "pending_bharati": True},
+        },
+    },
+    "bharati": {
+        "food": {
+            "total_items": 3,
+            "items": [
+                {"item_id": "bharati.food.dry_rations",   "name": "Dry Rations (2026 Stock)",   "current_stock": 5200,   "unit": "kg",         "reorder_qty": 1000,  "min_safe": 500,   "daily_use": "21 kg/day",     "days_left": 247, "status": "SAFE"},
+                {"item_id": "bharati.food.frozen",        "name": "Frozen Food Stock",           "current_stock": 1800,   "unit": "kg",         "reorder_qty": 1000,  "min_safe": 300,   "daily_use": "7.2 kg/day",    "days_left": 250, "status": "SAFE"},
+                {"item_id": "bharati.food.emergency_pack","name": "Emergency Food Packs",        "current_stock": 120,    "unit": "packs",      "reorder_qty": 60,    "min_safe": 30,    "daily_use": "0 packs/day",   "days_left": 365, "status": "SAFE"},
+            ],
+            "audit": {"last_verified_by": "Bharati Station Commander", "last_verified_at": "2026-09-14T08:00:00Z", "verified": True, "pending_maitri": True, "pending_bharati": False},
+        },
+        "fuel": {
+            "total_items": 2,
+            "items": [
+                {"item_id": "bharati.fuel.aviation",      "name": "Aviation Turbine Fuel (ATF)", "current_stock": 9800,   "unit": "litres",     "reorder_qty": 10000, "min_safe": 3000,  "daily_use": "38 litres/day", "days_left": 257, "status": "SAFE"},
+                {"item_id": "bharati.fuel.diesel_main",   "name": "Diesel Fuel (Main Reserve)",  "current_stock": 98000,  "unit": "litres",     "reorder_qty": 80000, "min_safe": 35000, "daily_use": "380 litres/day","days_left": 257, "status": "SAFE"},
+            ],
+            "audit": {"last_verified_by": "Bharati Station Commander", "last_verified_at": "2026-09-14T08:00:00Z", "verified": True, "pending_maitri": True, "pending_bharati": False},
+        },
+        "medical": {
+            "total_items": 2,
+            "items": [
+                {"item_id": "bharati.med.emergency_kit",  "name": "Emergency Medical Kit",       "current_stock": 6,      "unit": "kits",       "reorder_qty": 2,     "min_safe": 2,     "daily_use": "N/A",           "days_left": 365, "status": "SAFE"},
+                {"item_id": "bharati.med.oxygen_tanks",   "name": "Oxygen Cylinders",            "current_stock": 18,     "unit": "cylinders",  "reorder_qty": 10,    "min_safe": 6,     "daily_use": "N/A",           "days_left": 365, "status": "SAFE"},
+            ],
+            "audit": {"last_verified_by": "Station Medical Officer", "last_verified_at": "2026-09-09T10:00:00Z", "verified": True, "pending_maitri": True, "pending_bharati": False},
+        },
+        "spares": {
+            "total_items": 5,
+            "items": [
+                {"item_id": "bharati.spare.generator_parts",  "name": "Generator Spare Parts",      "current_stock": 1,      "unit": "set",        "reorder_qty": 1,     "min_safe": 1,     "daily_use": "N/A",           "days_left": 365, "status": "SAFE"},
+                {"item_id": "bharati.spare.snowcat_tracks",   "name": "Snow Cat Tracks",            "current_stock": 2,      "unit": "units",      "reorder_qty": 4,     "min_safe": 2,     "daily_use": "N/A",           "days_left": 365, "status": "SAFE"},
+                {"item_id": "bharati.spare.hydraulic_fluid",  "name": "Hydraulic Fluid",            "current_stock": 150,    "unit": "litres",     "reorder_qty": 150,   "min_safe": 50,    "daily_use": "N/A",           "days_left": 365, "status": "SAFE"},
+                {"item_id": "bharati.spare.heating_cables",   "name": "Heating Cables (50m)",       "current_stock": 7,      "unit": "rolls",      "reorder_qty": 5,     "min_safe": 3,     "daily_use": "N/A",           "days_left": 365, "status": "SAFE"},
+                {"item_id": "bharati.spare.comm_modules",     "name": "VSAT Communication Modules", "current_stock": 2,      "unit": "units",      "reorder_qty": 3,     "min_safe": 1,     "daily_use": "N/A",           "days_left": 365, "status": "SAFE"},
+            ],
+            "audit": {"last_verified_by": "Bharati Technical Officer", "last_verified_at": "2026-09-11T09:00:00Z", "verified": True, "pending_maitri": True, "pending_bharati": False},
+        },
+    },
+}
+
+
+@router.get("/logistics/audit-summary")
+async def get_logistics_audit_summary(
+    station_id: Optional[str] = Query(None, description="Filter: maitri or bharati"),
+) -> dict:
+    """Return hardcoded logistics audit & tracking summary per category.
+
+    Intended for the Maitri/Bharati dashboards to verify stock counts.
+    Returns per-category totals, item-level detail, reorder quantities,
+    and audit metadata (who verified and when).
+    """
+    if station_id and station_id.lower() in _LOGISTICS_AUDIT:
+        return {
+            "station_id": station_id.lower(),
+            "categories": _LOGISTICS_AUDIT[station_id.lower()],
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "data_source": "hardcoded_v1",
+        }
+    return {
+        "stations": {sid: {"categories": cats} for sid, cats in _LOGISTICS_AUDIT.items()},
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "data_source": "hardcoded_v1",
+    }
+
+
+# ---------------------------------------------------------------------------
 # Assets
 # ---------------------------------------------------------------------------
+
 
 @router.get("/stations/{station_id}/assets", response_model=List[AssetOut])
 async def get_assets(

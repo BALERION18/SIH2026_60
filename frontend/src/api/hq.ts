@@ -269,3 +269,52 @@ export async function downloadReportFile(
   return data
 }
 
+// ── Logistics Audit Summary ───────────────────────────────────────────────────
+
+export interface AuditItemDetail {
+  item_id: string
+  name: string
+  current_stock: number
+  unit: string
+  reorder_qty: number
+  min_safe: number
+  daily_use: string
+  days_left: number
+  status: 'SAFE' | 'WARNING' | 'CRITICAL'
+}
+
+export interface CategoryAudit {
+  last_verified_by: string
+  last_verified_at: string
+  verified: boolean
+  pending_maitri: boolean
+  pending_bharati: boolean
+}
+
+export interface LogisticsCategoryData {
+  total_items: number
+  items: AuditItemDetail[]
+  audit: CategoryAudit
+}
+
+export interface LogisticsAuditSummary {
+  station_id: string
+  categories: {
+    food: LogisticsCategoryData
+    fuel: LogisticsCategoryData
+    medical: LogisticsCategoryData
+    spares: LogisticsCategoryData
+  }
+  generated_at: string
+  data_source: string
+}
+
+export async function getLogisticsAuditSummary(
+  stationId: string,
+): Promise<LogisticsAuditSummary> {
+  const { data } = await api.get<LogisticsAuditSummary>(
+    '/hq/logistics/audit-summary',
+    { params: { station_id: stationId } },
+  )
+  return data
+}
