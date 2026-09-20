@@ -318,3 +318,55 @@ export async function getLogisticsAuditSummary(
   )
   return data
 }
+
+// ── IoT Sensor Registry ───────────────────────────────────────────────────────
+
+export interface SensorParameter {
+  key: string
+  label: string
+  value: number | string
+  unit: string
+  normal_range: string
+}
+
+export interface IoTSensor {
+  sensor_id: string
+  name: string
+  category: string
+  icon: string
+  state: 'online' | 'offline'
+  location: string
+  parameters: SensorParameter[]
+}
+
+export interface IoTCategory {
+  key: string
+  label: string
+  icon: string
+}
+
+export interface IoTSensorResponse {
+  station_id: string
+  sensors: IoTSensor[]
+  total: number
+  online: number
+  offline: number
+  categories: IoTCategory[]
+  generated_at: string
+  data_source: string
+}
+
+export async function getIoTSensors(
+  stationId: string,
+  category?: string,
+  state?: string,
+): Promise<IoTSensorResponse> {
+  const { data } = await api.get<IoTSensorResponse>('/hq/iot/sensors', {
+    params: {
+      station_id: stationId,
+      ...(category ? { category } : {}),
+      ...(state ? { state } : {}),
+    },
+  })
+  return data
+}

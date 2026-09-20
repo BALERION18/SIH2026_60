@@ -566,6 +566,405 @@ async def get_logistics_audit_summary(
 
 
 # ---------------------------------------------------------------------------
+# IoT Sensor Registry  (hardcoded until DB schema is extended)
+# ---------------------------------------------------------------------------
+
+_IOT_SENSORS: dict = {
+    "maitri": [
+        # ── Temperature & Climate ──────────────────────────────────────────
+        {
+            "sensor_id": "MAI-TMP-001", "name": "Outdoor Ambient Temperature", "category": "temperature",
+            "icon": "thermostat", "state": "online", "location": "Met Tower — NW Face",
+            "parameters": [
+                {"key": "temperature",      "label": "Ambient Temp",     "value": -18.2,  "unit": "°C",    "normal_range": "-70 to 5 °C"},
+                {"key": "rate_of_change",   "label": "Temp Rate Change", "value": -0.4,   "unit": "°C/hr", "normal_range": "-2 to 2 °C/hr"},
+                {"key": "sampling_interval","label": "Sampling Interval","value": 60,     "unit": "sec",   "normal_range": "60 sec"},
+                {"key": "sensor_voltage",   "label": "Sensor Voltage",   "value": 3.27,   "unit": "V",     "normal_range": "3.0–3.6 V"},
+            ],
+        },
+        {
+            "sensor_id": "MAI-TMP-002", "name": "Living Quarters Indoor Temp", "category": "temperature",
+            "icon": "thermostat", "state": "online", "location": "Module A — Corridor",
+            "parameters": [
+                {"key": "temperature",      "label": "Indoor Temp",      "value": 18.4,   "unit": "°C",    "normal_range": "16–22 °C"},
+                {"key": "humidity",         "label": "Relative Humidity","value": 42.1,   "unit": "%",     "normal_range": "35–55 %"},
+                {"key": "setpoint_delta",   "label": "Setpoint Delta",   "value": -0.6,   "unit": "°C",    "normal_range": "±2 °C"},
+                {"key": "sensor_voltage",   "label": "Sensor Voltage",   "value": 3.30,   "unit": "V",     "normal_range": "3.0–3.6 V"},
+            ],
+        },
+        {
+            "sensor_id": "MAI-TMP-003", "name": "Generator Hall Temp Monitor", "category": "temperature",
+            "icon": "thermostat", "state": "online", "location": "Generator Block — Engine Room",
+            "parameters": [
+                {"key": "temperature",      "label": "Engine Room Temp", "value": 32.6,   "unit": "°C",    "normal_range": "25–45 °C"},
+                {"key": "exhaust_temp",     "label": "Exhaust Temp",     "value": 420.0,  "unit": "°C",    "normal_range": "350–500 °C"},
+                {"key": "coolant_temp",     "label": "Coolant Temp",     "value": 88.2,   "unit": "°C",    "normal_range": "70–95 °C"},
+                {"key": "sensor_voltage",   "label": "Sensor Voltage",   "value": 3.29,   "unit": "V",     "normal_range": "3.0–3.6 V"},
+            ],
+        },
+        # ── Atmospheric Pressure ───────────────────────────────────────────
+        {
+            "sensor_id": "MAI-PRS-001", "name": "Barometric Pressure Sensor", "category": "pressure",
+            "icon": "compress", "state": "online", "location": "Met Tower — Top Platform",
+            "parameters": [
+                {"key": "pressure",         "label": "Barometric Press", "value": 994.2,  "unit": "hPa",   "normal_range": "940–1030 hPa"},
+                {"key": "pressure_trend",   "label": "3h Trend",         "value": -2.8,   "unit": "hPa/3h","normal_range": "-10 to 10 hPa/3h"},
+                {"key": "altitude_corrected","label": "Altitude Corr.",  "value": 1042.1, "unit": "hPa",   "normal_range": "960–1050 hPa"},
+                {"key": "sensor_health",    "label": "Sensor Health",    "value": 99.1,   "unit": "%",     "normal_range": ">95 %"},
+            ],
+        },
+        {
+            "sensor_id": "MAI-PRS-002", "name": "Fuel Tank Pressure Monitor", "category": "pressure",
+            "icon": "compress", "state": "online", "location": "Fuel Farm — Tank F1",
+            "parameters": [
+                {"key": "tank_pressure",    "label": "Tank Headspace P.","value": 1.04,   "unit": "bar",   "normal_range": "0.9–1.1 bar"},
+                {"key": "vapor_pressure",   "label": "Vapour Pressure",  "value": 0.18,   "unit": "bar",   "normal_range": "<0.25 bar"},
+                {"key": "temperature",      "label": "Fuel Temp",        "value": -12.4,  "unit": "°C",    "normal_range": "-30 to 5 °C"},
+                {"key": "ullage",           "label": "Ullage (headspace)","value": 18.2,  "unit": "%",     "normal_range": "10–30 %"},
+            ],
+        },
+        # ── Fuel Level ─────────────────────────────────────────────────────
+        {
+            "sensor_id": "MAI-FUL-001", "name": "Diesel Reserve Level Sensor", "category": "fuel",
+            "icon": "local_gas_station", "state": "online", "location": "Fuel Farm — Main Depot",
+            "parameters": [
+                {"key": "fuel_level",       "label": "Fuel Level",       "value": 81.4,   "unit": "%",     "normal_range": ">30 %"},
+                {"key": "volume",           "label": "Volume Remaining",  "value": 136800, "unit": "L",     "normal_range": ">40 000 L"},
+                {"key": "consumption_rate", "label": "Consumption Rate",  "value": 530,    "unit": "L/day", "normal_range": "<800 L/day"},
+                {"key": "days_remaining",   "label": "Days Remaining",    "value": 258,    "unit": "days",  "normal_range": ">90 days"},
+            ],
+        },
+        {
+            "sensor_id": "MAI-FUL-002", "name": "Aviation Fuel (ATF) Monitor", "category": "fuel",
+            "icon": "local_gas_station", "state": "online", "location": "Heliad — ATF Bladder",
+            "parameters": [
+                {"key": "fuel_level",       "label": "ATF Level",        "value": 62.0,   "unit": "%",     "normal_range": ">25 %"},
+                {"key": "volume",           "label": "Volume Remaining",  "value": 12400,  "unit": "L",     "normal_range": ">3 000 L"},
+                {"key": "contamination",    "label": "Water Content",     "value": 0.002,  "unit": "%vol",  "normal_range": "<0.01 %vol"},
+                {"key": "temperature",      "label": "Fuel Temp",        "value": -15.2,  "unit": "°C",    "normal_range": "-40 to 5 °C"},
+            ],
+        },
+        # ── Seismic ────────────────────────────────────────────────────────
+        {
+            "sensor_id": "MAI-SES-001", "name": "Seismic Activity Sensor", "category": "seismic",
+            "icon": "earthquake", "state": "online", "location": "Foundation Slab — Central",
+            "parameters": [
+                {"key": "ground_velocity",  "label": "Peak Ground Vel.", "value": 0.003,  "unit": "mm/s",  "normal_range": "<2 mm/s"},
+                {"key": "frequency",        "label": "Dominant Freq.",   "value": 4.2,    "unit": "Hz",    "normal_range": "1–20 Hz"},
+                {"key": "richter_est",      "label": "Est. Magnitude",   "value": 0.1,    "unit": "Ml",    "normal_range": "<2.0 Ml"},
+                {"key": "event_count_24h",  "label": "Events (24 h)",    "value": 0,      "unit": "events","normal_range": "<5"},
+            ],
+        },
+        # ── Wildlife / Ecology ─────────────────────────────────────────────
+        {
+            "sensor_id": "MAI-WLD-001", "name": "Wildlife Proximity Sensor", "category": "wildlife",
+            "icon": "pets", "state": "online", "location": "Station Perimeter — South Fence",
+            "parameters": [
+                {"key": "detection_count",  "label": "Detections (24 h)","value": 3,      "unit": "events","normal_range": "0–20"},
+                {"key": "closest_approach", "label": "Min Distance",     "value": 42.0,   "unit": "m",     "normal_range": ">10 m"},
+                {"key": "noise_level",      "label": "Ambient Noise",    "value": 38.4,   "unit": "dB",    "normal_range": "<70 dB"},
+                {"key": "infrared_flux",    "label": "IR Flux (heat sig)","value": 0.12,  "unit": "W/m²",  "normal_range": ">0.05 W/m²"},
+            ],
+        },
+        # ── Radiation ──────────────────────────────────────────────────────
+        {
+            "sensor_id": "MAI-RAD-001", "name": "UV / Solar Radiation Sensor", "category": "radiation",
+            "icon": "wb_sunny", "state": "online", "location": "Roof Deck — South Aspect",
+            "parameters": [
+                {"key": "uv_index",         "label": "UV Index",         "value": 1.4,    "unit": "UVI",   "normal_range": "0–12 UVI"},
+                {"key": "solar_irradiance", "label": "Solar Irradiance", "value": 312.0,  "unit": "W/m²",  "normal_range": "0–1400 W/m²"},
+                {"key": "ozone_column",     "label": "Ozone Column",     "value": 298.0,  "unit": "DU",    "normal_range": "200–400 DU"},
+                {"key": "uva_dose",         "label": "Daily UVA Dose",   "value": 0.42,   "unit": "kJ/m²", "normal_range": "<5 kJ/m²"},
+            ],
+        },
+        # ── Meteorological ─────────────────────────────────────────────────
+        {
+            "sensor_id": "MAI-MET-001", "name": "Wind Speed & Direction", "category": "meteorological",
+            "icon": "air", "state": "online", "location": "Met Tower — 10 m AGL",
+            "parameters": [
+                {"key": "wind_speed",       "label": "Wind Speed",       "value": 22.4,   "unit": "km/h",  "normal_range": "0–250 km/h"},
+                {"key": "wind_direction",   "label": "Wind Direction",   "value": 248,    "unit": "°",     "normal_range": "0–360 °"},
+                {"key": "gust_speed",       "label": "Peak Gust",        "value": 34.0,   "unit": "km/h",  "normal_range": "0–300 km/h"},
+                {"key": "turbulence",       "label": "Turbulence Intens.","value": 0.12,  "unit": "TI",    "normal_range": "0–1"},
+            ],
+        },
+        {
+            "sensor_id": "MAI-MET-002", "name": "Snowfall & Precipitation Gauge", "category": "meteorological",
+            "icon": "ac_unit", "state": "offline", "location": "Open Field — Station NE",
+            "parameters": [
+                {"key": "snowfall_rate",    "label": "Snowfall Rate",    "value": 0.0,    "unit": "mm/hr", "normal_range": "0–100 mm/hr"},
+                {"key": "snow_depth",       "label": "Snow Depth",       "value": 142.0,  "unit": "cm",    "normal_range": "0–500 cm"},
+                {"key": "visibility",       "label": "Visibility",       "value": 2.4,    "unit": "km",    "normal_range": "0–50 km"},
+                {"key": "blizzard_risk",    "label": "Blizzard Risk",    "value": "MEDIUM","unit": "",      "normal_range": "LOW"},
+            ],
+        },
+        # ── Structural / Strain ────────────────────────────────────────────
+        {
+            "sensor_id": "MAI-STR-001", "name": "Main Beam Strain Gauge", "category": "structural",
+            "icon": "foundation", "state": "online", "location": "Main Building — Span Centre",
+            "parameters": [
+                {"key": "strain",           "label": "Strain",           "value": 182,    "unit": "μϵ",    "normal_range": "<250 μϵ"},
+                {"key": "settlement",       "label": "Foundation Settle.","value": 12.0,  "unit": "mm",    "normal_range": "<25 mm"},
+                {"key": "snow_load",        "label": "Roof Snow Load",   "value": 3.2,    "unit": "kN/m²", "normal_range": "<6 kN/m²"},
+                {"key": "temperature",      "label": "Beam Temp",        "value": -8.1,   "unit": "°C",    "normal_range": "-60 to 60 °C"},
+            ],
+        },
+        # ── Air Quality ────────────────────────────────────────────────────
+        {
+            "sensor_id": "MAI-AQI-001", "name": "Indoor Air Quality Monitor", "category": "air_quality",
+            "icon": "air", "state": "online", "location": "Laboratory Block — Main Lab",
+            "parameters": [
+                {"key": "co2",              "label": "CO₂",              "value": 812,    "unit": "ppm",   "normal_range": "<1000 ppm"},
+                {"key": "co",              "label": "CO",               "value": 2.0,    "unit": "ppm",   "normal_range": "<9 ppm"},
+                {"key": "pm25",            "label": "PM2.5",            "value": 8.0,    "unit": "μg/m³", "normal_range": "<25 μg/m³"},
+                {"key": "oxygen",          "label": "O₂ Concentration", "value": 20.9,   "unit": "%",     "normal_range": "19.5–23.5 %"},
+            ],
+        },
+        # ── Fire & Safety ──────────────────────────────────────────────────
+        {
+            "sensor_id": "MAI-FIR-001", "name": "Smoke & Fire Detection Array", "category": "fire_safety",
+            "icon": "local_fire_department", "state": "online", "location": "All Zones — Network",
+            "parameters": [
+                {"key": "smoke_density",    "label": "Smoke Density",    "value": 0.02,   "unit": "obs/m", "normal_range": "<0.1 obs/m"},
+                {"key": "temp_rise_rate",   "label": "Temp Rise Rate",   "value": 0.1,    "unit": "°C/min","normal_range": "<8 °C/min"},
+                {"key": "detectors_active", "label": "Detectors Online", "value": 24,     "unit": "/24",   "normal_range": "24/24"},
+                {"key": "last_test",        "label": "Last System Test", "value": 14,     "unit": "days ago","normal_range": "<30 days"},
+            ],
+        },
+        # ── Communications ─────────────────────────────────────────────────
+        {
+            "sensor_id": "MAI-COM-001", "name": "VSAT Link Quality Monitor", "category": "communications",
+            "icon": "satellite_alt", "state": "online", "location": "Antenna Farm — VSAT Dish 1",
+            "parameters": [
+                {"key": "signal_strength",  "label": "Signal Strength",  "value": 8.4,    "unit": "dB",    "normal_range": ">5 dB"},
+                {"key": "latency",          "label": "Round-trip Latency","value": 640,    "unit": "ms",    "normal_range": "<1500 ms"},
+                {"key": "bandwidth",        "label": "Bandwidth",         "value": 2.1,    "unit": "Mbps",  "normal_range": ">0.5 Mbps"},
+                {"key": "packet_loss",      "label": "Packet Loss",       "value": 0.2,    "unit": "%",     "normal_range": "<2 %"},
+            ],
+        },
+    ],
+    "bharati": [
+        # ── Temperature ────────────────────────────────────────────────────
+        {
+            "sensor_id": "BHA-TMP-001", "name": "Outdoor Ambient Temperature", "category": "temperature",
+            "icon": "thermostat", "state": "online", "location": "Met Mast — NE Face",
+            "parameters": [
+                {"key": "temperature",      "label": "Ambient Temp",     "value": -24.6,  "unit": "°C",    "normal_range": "-70 to 5 °C"},
+                {"key": "rate_of_change",   "label": "Temp Rate Change", "value": -0.8,   "unit": "°C/hr", "normal_range": "-2 to 2 °C/hr"},
+                {"key": "sampling_interval","label": "Sampling Interval","value": 60,     "unit": "sec",   "normal_range": "60 sec"},
+                {"key": "sensor_voltage",   "label": "Sensor Voltage",   "value": 3.24,   "unit": "V",     "normal_range": "3.0–3.6 V"},
+            ],
+        },
+        {
+            "sensor_id": "BHA-TMP-002", "name": "Accommodation Module Temp", "category": "temperature",
+            "icon": "thermostat", "state": "online", "location": "Berthing Module — B2",
+            "parameters": [
+                {"key": "temperature",      "label": "Indoor Temp",      "value": 19.6,   "unit": "°C",    "normal_range": "16–22 °C"},
+                {"key": "humidity",         "label": "Relative Humidity","value": 39.4,   "unit": "%",     "normal_range": "35–55 %"},
+                {"key": "setpoint_delta",   "label": "Setpoint Delta",   "value": 0.4,    "unit": "°C",    "normal_range": "±2 °C"},
+                {"key": "sensor_voltage",   "label": "Sensor Voltage",   "value": 3.31,   "unit": "V",     "normal_range": "3.0–3.6 V"},
+            ],
+        },
+        # ── Pressure ───────────────────────────────────────────────────────
+        {
+            "sensor_id": "BHA-PRS-001", "name": "Barometric Pressure Sensor", "category": "pressure",
+            "icon": "compress", "state": "online", "location": "Met Mast — Top Platform",
+            "parameters": [
+                {"key": "pressure",         "label": "Barometric Press", "value": 988.6,  "unit": "hPa",   "normal_range": "940–1030 hPa"},
+                {"key": "pressure_trend",   "label": "3h Trend",         "value": -5.1,   "unit": "hPa/3h","normal_range": "-10 to 10 hPa/3h"},
+                {"key": "altitude_corrected","label": "Altitude Corr.",  "value": 1038.4, "unit": "hPa",   "normal_range": "960–1050 hPa"},
+                {"key": "sensor_health",    "label": "Sensor Health",    "value": 98.6,   "unit": "%",     "normal_range": ">95 %"},
+            ],
+        },
+        # ── Fuel ───────────────────────────────────────────────────────────
+        {
+            "sensor_id": "BHA-FUL-001", "name": "Diesel Reserve Level Sensor", "category": "fuel",
+            "icon": "local_gas_station", "state": "online", "location": "Fuel Bund — Main Tank",
+            "parameters": [
+                {"key": "fuel_level",       "label": "Fuel Level",       "value": 74.2,   "unit": "%",     "normal_range": ">30 %"},
+                {"key": "volume",           "label": "Volume Remaining",  "value": 98000,  "unit": "L",     "normal_range": ">35 000 L"},
+                {"key": "consumption_rate", "label": "Consumption Rate",  "value": 380,    "unit": "L/day", "normal_range": "<600 L/day"},
+                {"key": "days_remaining",   "label": "Days Remaining",    "value": 257,    "unit": "days",  "normal_range": ">90 days"},
+            ],
+        },
+        # ── Seismic ────────────────────────────────────────────────────────
+        {
+            "sensor_id": "BHA-SES-001", "name": "Seismic / Ice-Quake Sensor", "category": "seismic",
+            "icon": "earthquake", "state": "online", "location": "Bedrock Anchor — West Arm",
+            "parameters": [
+                {"key": "ground_velocity",  "label": "Peak Ground Vel.", "value": 0.008,  "unit": "mm/s",  "normal_range": "<2 mm/s"},
+                {"key": "frequency",        "label": "Dominant Freq.",   "value": 6.8,    "unit": "Hz",    "normal_range": "1–20 Hz"},
+                {"key": "richter_est",      "label": "Est. Magnitude",   "value": 0.3,    "unit": "Ml",    "normal_range": "<2.0 Ml"},
+                {"key": "event_count_24h",  "label": "Events (24 h)",    "value": 2,      "unit": "events","normal_range": "<5"},
+            ],
+        },
+        {
+            "sensor_id": "BHA-SES-002", "name": "Glacial Movement Sensor", "category": "seismic",
+            "icon": "earthquake", "state": "offline", "location": "Ice Sheet Anchor — 500m NW",
+            "parameters": [
+                {"key": "ice_velocity",     "label": "Ice Sheet Velocity","value": 0.0,   "unit": "cm/day","normal_range": "0–50 cm/day"},
+                {"key": "crack_depth",      "label": "Detected Crack Depth","value": 0.0, "unit": "m",     "normal_range": "N/A"},
+                {"key": "gps_drift",        "label": "GPS Drift",         "value": 0.0,   "unit": "cm",    "normal_range": "<100 cm"},
+                {"key": "tilt",             "label": "Tilt Angle",        "value": 0.0,   "unit": "°",     "normal_range": "<5 °"},
+            ],
+        },
+        # ── Wildlife ───────────────────────────────────────────────────────
+        {
+            "sensor_id": "BHA-WLD-001", "name": "Penguin Colony Monitor", "category": "wildlife",
+            "icon": "pets", "state": "online", "location": "Shore Perimeter — East Rookery",
+            "parameters": [
+                {"key": "detection_count",  "label": "Detections (24 h)","value": 42,     "unit": "events","normal_range": "0–200"},
+                {"key": "closest_approach", "label": "Min Distance",     "value": 8.2,    "unit": "m",     "normal_range": ">5 m"},
+                {"key": "acoustic_level",   "label": "Colony Noise",     "value": 52.8,   "unit": "dB",    "normal_range": "<80 dB"},
+                {"key": "infrared_flux",    "label": "IR Flux (heat sig)","value": 1.48,  "unit": "W/m²",  "normal_range": ">0.05 W/m²"},
+            ],
+        },
+        # ── Radiation ──────────────────────────────────────────────────────
+        {
+            "sensor_id": "BHA-RAD-001", "name": "UV / Solar Radiation Sensor", "category": "radiation",
+            "icon": "wb_sunny", "state": "online", "location": "Roof Deck — South Aspect",
+            "parameters": [
+                {"key": "uv_index",         "label": "UV Index",         "value": 2.1,    "unit": "UVI",   "normal_range": "0–12 UVI"},
+                {"key": "solar_irradiance", "label": "Solar Irradiance", "value": 488.0,  "unit": "W/m²",  "normal_range": "0–1400 W/m²"},
+                {"key": "ozone_column",     "label": "Ozone Column",     "value": 284.0,  "unit": "DU",    "normal_range": "200–400 DU"},
+                {"key": "uva_dose",         "label": "Daily UVA Dose",   "value": 0.64,   "unit": "kJ/m²", "normal_range": "<5 kJ/m²"},
+            ],
+        },
+        # ── Meteorological ─────────────────────────────────────────────────
+        {
+            "sensor_id": "BHA-MET-001", "name": "Wind Speed & Direction", "category": "meteorological",
+            "icon": "air", "state": "online", "location": "Met Mast — 10 m AGL",
+            "parameters": [
+                {"key": "wind_speed",       "label": "Wind Speed",       "value": 38.6,   "unit": "km/h",  "normal_range": "0–250 km/h"},
+                {"key": "wind_direction",   "label": "Wind Direction",   "value": 312,    "unit": "°",     "normal_range": "0–360 °"},
+                {"key": "gust_speed",       "label": "Peak Gust",        "value": 62.0,   "unit": "km/h",  "normal_range": "0–300 km/h"},
+                {"key": "turbulence",       "label": "Turbulence Intens.","value": 0.24,  "unit": "TI",    "normal_range": "0–1"},
+            ],
+        },
+        {
+            "sensor_id": "BHA-MET-002", "name": "Snowfall & Blizzard Gauge", "category": "meteorological",
+            "icon": "ac_unit", "state": "online", "location": "Station Perimeter — Open Field",
+            "parameters": [
+                {"key": "snowfall_rate",    "label": "Snowfall Rate",    "value": 2.4,    "unit": "mm/hr", "normal_range": "0–100 mm/hr"},
+                {"key": "snow_depth",       "label": "Snow Depth",       "value": 218.0,  "unit": "cm",    "normal_range": "0–500 cm"},
+                {"key": "visibility",       "label": "Visibility",       "value": 0.6,    "unit": "km",    "normal_range": "0–50 km"},
+                {"key": "blizzard_risk",    "label": "Blizzard Risk",    "value": "HIGH",  "unit": "",      "normal_range": "LOW"},
+            ],
+        },
+        # ── Structural ────────────────────────────────────────────────────
+        {
+            "sensor_id": "BHA-STR-001", "name": "Main Building Strain Gauge", "category": "structural",
+            "icon": "foundation", "state": "online", "location": "Modular Frame — Junction J4",
+            "parameters": [
+                {"key": "strain",           "label": "Strain",           "value": 204,    "unit": "μϵ",    "normal_range": "<250 μϵ"},
+                {"key": "settlement",       "label": "Foundation Settle.","value": 8.2,   "unit": "mm",    "normal_range": "<25 mm"},
+                {"key": "snow_load",        "label": "Roof Snow Load",   "value": 4.8,    "unit": "kN/m²", "normal_range": "<6 kN/m²"},
+                {"key": "temperature",      "label": "Frame Temp",       "value": -16.4,  "unit": "°C",    "normal_range": "-60 to 60 °C"},
+            ],
+        },
+        # ── Air Quality ────────────────────────────────────────────────────
+        {
+            "sensor_id": "BHA-AQI-001", "name": "Indoor Air Quality Monitor", "category": "air_quality",
+            "icon": "air", "state": "online", "location": "Main Lab — Section 3",
+            "parameters": [
+                {"key": "co2",              "label": "CO₂",              "value": 948,    "unit": "ppm",   "normal_range": "<1000 ppm"},
+                {"key": "co",               "label": "CO",               "value": 3.2,    "unit": "ppm",   "normal_range": "<9 ppm"},
+                {"key": "pm25",             "label": "PM2.5",            "value": 11.0,   "unit": "μg/m³", "normal_range": "<25 μg/m³"},
+                {"key": "oxygen",           "label": "O₂ Concentration", "value": 20.8,   "unit": "%",     "normal_range": "19.5–23.5 %"},
+            ],
+        },
+        # ── Ocean & Ice Monitoring ─────────────────────────────────────────
+        {
+            "sensor_id": "BHA-OCN-001", "name": "Sea Ice Thickness Sensor", "category": "oceanographic",
+            "icon": "water", "state": "online", "location": "Jetty — Ice Monitoring Buoy",
+            "parameters": [
+                {"key": "ice_thickness",    "label": "Sea Ice Thickness","value": 182.0,  "unit": "cm",    "normal_range": ">50 cm (safe)"},
+                {"key": "ice_temperature",  "label": "Ice Surface Temp", "value": -19.2,  "unit": "°C",    "normal_range": "<0 °C"},
+                {"key": "wave_height",      "label": "Swell Height",     "value": 1.8,    "unit": "m",     "normal_range": "<5 m (safe ops)"},
+                {"key": "tidal_level",      "label": "Tidal Level",      "value": 0.42,   "unit": "m",     "normal_range": "0–2 m"},
+            ],
+        },
+        # ── Fire Safety ────────────────────────────────────────────────────
+        {
+            "sensor_id": "BHA-FIR-001", "name": "Smoke & Fire Detection Array", "category": "fire_safety",
+            "icon": "local_fire_department", "state": "online", "location": "All Zones — Network",
+            "parameters": [
+                {"key": "smoke_density",    "label": "Smoke Density",    "value": 0.01,   "unit": "obs/m", "normal_range": "<0.1 obs/m"},
+                {"key": "temp_rise_rate",   "label": "Temp Rise Rate",   "value": 0.0,    "unit": "°C/min","normal_range": "<8 °C/min"},
+                {"key": "detectors_active", "label": "Detectors Online", "value": 48,     "unit": "/48",   "normal_range": "48/48"},
+                {"key": "last_test",        "label": "Last System Test", "value": 8,      "unit": "days ago","normal_range": "<30 days"},
+            ],
+        },
+        # ── Communications ─────────────────────────────────────────────────
+        {
+            "sensor_id": "BHA-COM-001", "name": "VSAT Link Quality Monitor", "category": "communications",
+            "icon": "satellite_alt", "state": "online", "location": "Antenna Farm — VSAT Dish 1",
+            "parameters": [
+                {"key": "signal_strength",  "label": "Signal Strength",  "value": 14.2,   "unit": "dB",    "normal_range": ">5 dB"},
+                {"key": "latency",          "label": "Round-trip Latency","value": 780,    "unit": "ms",    "normal_range": "<1500 ms"},
+                {"key": "bandwidth",        "label": "Bandwidth",         "value": 4.8,    "unit": "Mbps",  "normal_range": ">0.5 Mbps"},
+                {"key": "packet_loss",      "label": "Packet Loss",       "value": 0.1,    "unit": "%",     "normal_range": "<2 %"},
+            ],
+        },
+    ],
+}
+
+_IOT_CATEGORIES = [
+    {"key": "temperature",     "label": "Temperature",           "icon": "thermostat"},
+    {"key": "pressure",        "label": "Pressure",              "icon": "compress"},
+    {"key": "fuel",            "label": "Fuel Monitoring",       "icon": "local_gas_station"},
+    {"key": "seismic",         "label": "Seismic / Glacial",     "icon": "earthquake"},
+    {"key": "wildlife",        "label": "Wildlife & Ecology",    "icon": "pets"},
+    {"key": "radiation",       "label": "UV & Radiation",        "icon": "wb_sunny"},
+    {"key": "meteorological",  "label": "Meteorological",        "icon": "air"},
+    {"key": "structural",      "label": "Structural Integrity",  "icon": "foundation"},
+    {"key": "air_quality",     "label": "Air Quality",           "icon": "air"},
+    {"key": "oceanographic",   "label": "Oceanographic",         "icon": "water"},
+    {"key": "fire_safety",     "label": "Fire & Safety",         "icon": "local_fire_department"},
+    {"key": "communications",  "label": "Communications",        "icon": "satellite_alt"},
+]
+
+
+@router.get("/iot/sensors")
+async def get_iot_sensors(
+    station_id: Optional[str] = Query(None, description="Filter: maitri or bharati"),
+    category: Optional[str] = Query(None, description="Filter by sensor category"),
+    state: Optional[str] = Query(None, description="Filter: online or offline"),
+) -> dict:
+    """Return hardcoded IoT sensor registry for Antarctic stations.
+
+    Each sensor includes its current state (online/offline) and 3–4
+    governing operational parameters with current readings, units, and
+    normal operating ranges.  Intended for the IoT Tracking page and
+    linkable to Maitri/Bharati dashboards once they are built.
+    """
+    if station_id and station_id.lower() in _IOT_SENSORS:
+        sensors = _IOT_SENSORS[station_id.lower()]
+        if category:
+            sensors = [s for s in sensors if s["category"] == category.lower()]
+        if state:
+            sensors = [s for s in sensors if s["state"] == state.lower()]
+        return {
+            "station_id": station_id.lower(),
+            "sensors": sensors,
+            "total": len(sensors),
+            "online": sum(1 for s in sensors if s["state"] == "online"),
+            "offline": sum(1 for s in sensors if s["state"] == "offline"),
+            "categories": _IOT_CATEGORIES,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "data_source": "hardcoded_v1",
+        }
+    # Both stations
+    all_sensors = {sid: lst for sid, lst in _IOT_SENSORS.items()}
+    return {
+        "stations": all_sensors,
+        "categories": _IOT_CATEGORIES,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "data_source": "hardcoded_v1",
+    }
+
+
+# ---------------------------------------------------------------------------
 # Assets
 # ---------------------------------------------------------------------------
 
