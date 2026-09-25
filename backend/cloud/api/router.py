@@ -1315,3 +1315,117 @@ async def download_report(
 @router.get("/health", tags=["health"])
 async def health() -> dict:
     return {"status": "ok", "service": "cloud-hq-api", "version": "1.0.0"}
+
+
+# ---------------------------------------------------------------------------
+# Reports
+# ---------------------------------------------------------------------------
+
+_REPORT_TYPES = {
+    "daily":      "Daily Operations Report",
+    "monthly":    "Monthly Summary Report",
+    "incident":   "Incident & Alerts Report",
+    "scientific": "Scientific / Sensors Report",
+    "audit":      "Audit & Inventory Report",
+}
+
+
+@router.get("/report")
+async def get_report(
+    report_type: str = Query("daily", description="daily | monthly | incident | scientific | audit"),
+    station_id: Optional[str] = Query(None, description="maitri | bharati | None for both"),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """Generate a report summary from live DB data."""
+    report_label = _REPORT_TYPES.get(report_type, report_type.title())
+    stations = [station_id] if station_id else ["maitri", "bharati"]
+    now = utcnow()
+    cutoff_24h = now - timedelta(hours=24)
+    cutoff_30d = now - timedelta(days=30)
+
+    sections: list[dict] = []
+
+    for sid in stations:
+        conn_result = await session.execute(
+            select(StationConnection).where(StationConnection.station_id == sid)
+        )
+        conn = conn_result.scalar_one_or_none()
+        link_state = conn.link_state if conn else "UNKNOWN"
+
+        # Alert counts
+        alert_rows = (await session.execute(
+            select(Alert.severity, func.count(Alert.alert_id).label("cnt"))
+            .where(Alert.station_id == sid)
+            .where(Alert.triggered_at >= (cutoff_30d if report_type == "monthly" else cutoff_24h))
+            .group_by(Alert.severity)
+        )).all()
+        alert_summary = {row[0]: row[1] for row in alert_rows}
+
+        # Sensor reading count
+        reading_count = (await session.execute(
+            select(func.count(SensorReading.id))
+            .where(SensorReading.station_id == sid)
+            .where(SensorReading.timestamp_utc >= cutoff_24h)
+        )).scalar_one() or 0
+
+        # Inventory summary
+        inv_rows = (await session.execute(
+            select(InventoryItem).where(InventoryItem.station_id == sid)
+        )).scalars().all()
+        inv_summary = [
+            {
+                "name": item.name,
+                "category": item.category,
+                "quantity": item.quantity,
+                "unit": item.unit,
+                "days_remaining": item.days_remaining,
+                "status": _compute_inventory_status(item),
+            }
+            for item in inv_rows
+        ]
+
+        # Recent alerts list (top 10)
+        recent_alerts = (await session.execute(
+            select(Alert)
+            .where(Alert.station_id == sid)
+            .where(Alert.triggered_at >= (cutoff_30d if report_type == "monthly" else cutoff_24h))
+            .order_by(Alert.triggered_at.desc())
+            .limit(10)
+        )).scalars().all()
+
+        sections.append({
+            "station_id": sid,
+            "station_name": _station_display(sid),
+            "link_state": link_state,
+            "alert_summary": alert_summary,
+            "total_alerts": sum(alert_summary.values()),
+            "sensor_readings_24h": reading_count,
+            "inventory": inv_summary,
+            "recent_alerts": [
+                {
+                    "alert_id": a.alert_id,
+                    "severity": a.severity,
+                    "description": a.description,
+                    "ack_state": a.ack_state,
+                    "triggered_at": a.triggered_at.isoformat() if a.triggered_at else None,
+                }
+                for a in recent_alerts
+            ],
+        })
+
+    return {
+        "report_type": report_type,
+        "report_label": report_label,
+        "generated_at": now.isoformat(),
+        "stations": sections,
+    }
+
+
+@router.get("/report/download")
+async def download_report(
+    report_type: str = Query("daily"),
+    station_id: Optional[str] = Query(None),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """Alias for /report — returns same data for download."""
+    return await get_report(report_type=report_type, station_id=station_id, session=session)

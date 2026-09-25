@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-VajraX — Direct Neon Database Init + Seed (No Alembic)
+Lakshya — Direct Neon Database Init + Seed (No Alembic)
 ========================================================
 Creates all tables using SQLAlchemy metadata.create_all() and inserts
 rich dummy data for the frontend dashboard demo.
