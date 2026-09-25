@@ -13,7 +13,7 @@ The system combines **Edge AI, Digital Twins, predictive analytics, offline-firs
 | Field             | Details                                                                                |
 | ----------------- | -------------------------------------------------------------------------------------- |
 | **Project Title** | Himantar                                                                               |
-| **Team Name**     | VajraX                                                                                 |
+| **Team Name**     | TEAM_LAKSHYA                                                                                 |
 | **PS ID**         | SIH`26060`                                                                                |
 | **PS Title**      | Digital Platform for efficient remote management of Indian Antarctic Research Stations |
 | **Organization**  | Ministry of Earth Sciences (MoES)                                                      |
