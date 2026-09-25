@@ -19,22 +19,63 @@ import structlog
 log = structlog.get_logger(__name__)
 
 _pool: Optional[aioredis.Redis] = None
+_mock_mode: bool = False
 
 
 async def init_redis(url: str) -> aioredis.Redis:
-    """Connect to Redis and store the global pool. Call once at startup."""
-    global _pool
-    _pool = aioredis.from_url(
-        url,
-        encoding="utf-8",
-        decode_responses=False,  # keep bytes — JSON payloads are encoded manually
-        socket_keepalive=True,
-        health_check_interval=30,
-    )
-    # Verify connectivity
-    await _pool.ping()
-    log.info("edge.redis.connected", url=url)
-    return _pool
+    """Connect to Redis and store the global pool. Call once at startup.
+    Falls back to an in-memory fake if Redis is unavailable (dev mode)."""
+    global _pool, _mock_mode
+    try:
+        _pool = aioredis.from_url(
+            url,
+            encoding="utf-8",
+            decode_responses=False,
+            socket_keepalive=True,
+            health_check_interval=30,
+        )
+        await _pool.ping()
+        log.info("edge.redis.connected", url=url)
+    except Exception as exc:
+        log.warning(
+            "edge.redis.unavailable",
+            error=str(exc),
+            hint="Using in-memory Redis mock. Queue/dedup/pub-sub won't persist across restarts.",
+        )
+        # fakeredis provides a real async in-memory Redis implementation
+        try:
+            import fakeredis.aioredis as fakeredis  # type: ignore
+            _pool = fakeredis.FakeRedis(decode_responses=False)
+        except ImportError:
+            # fakeredis not installed — use a minimal stub
+            _pool = _MinimalStub()  # type: ignore
+        _mock_mode = True
+    return _pool  # type: ignore
+
+
+class _MinimalStub:
+    """Bare-minimum Redis stub so the edge server can start without Redis."""
+
+    async def ping(self): return True
+    async def close(self): pass
+    async def aclose(self): pass
+    async def set(self, *a, **kw): return True
+    async def get(self, *a, **kw): return None
+    async def delete(self, *a, **kw): return 0
+    async def exists(self, *a, **kw): return 0
+    async def expire(self, *a, **kw): return False
+    async def publish(self, *a, **kw): return 0
+    async def zadd(self, *a, **kw): return 0
+    async def zrange(self, *a, **kw): return []
+    async def zrem(self, *a, **kw): return 0
+    async def zcard(self, *a, **kw): return 0
+    async def pubsub(self, *a, **kw): return _PubSubStub()
+
+class _PubSubStub:
+    async def subscribe(self, *a, **kw): pass
+    async def unsubscribe(self, *a, **kw): pass
+    async def get_message(self, *a, **kw): return None
+    async def close(self): pass
 
 
 async def close_redis() -> None:
