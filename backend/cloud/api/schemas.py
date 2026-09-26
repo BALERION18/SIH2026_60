@@ -71,6 +71,7 @@ class SensorSummaryOut(BaseModel):
     latest_unit: Optional[str] = None
     latest_ts: Optional[datetime] = None
     readings_count_24h: int
+    quality: Optional[str] = None  # NOMINAL | SUSPECT | FAILED
 
 
 # ---------------------------------------------------------------------------

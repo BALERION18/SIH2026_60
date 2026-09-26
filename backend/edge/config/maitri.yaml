@@ -1,4 +1,4 @@
-# VajraX Station Configuration — Maitri Research Station
+# Lakshya Station Configuration — Maitri Research Station
 # Schirmacher Oasis, Dronning Maud Land, Antarctica
 # DO NOT hardcode station_id in application code — always read from this file.
 
@@ -26,13 +26,42 @@ sync:
     weather: 900      # 15 minutes
     environment: 900  # 15 minutes
     logistics: 3600   # 1 hour
+
+  # ── Message-type priority (lower = higher priority) ──────────────────
   priority_map:
-    black_box: 0
-    alert_critical: 1
-    alert_high: 1
-    alert_medium: 2
-    alert_low: 2
-    telemetry: 3
+    BLACK_BOX_FRAME:    0   # Life safety — never drop, always first
+    ALERT_CRITICAL:     1   # Fire, CO, generator fault, blackout
+    ALERT_HIGH:         1   # Fuel low, storm warning, oil pressure
+    ALERT_MEDIUM:       2   # Wind speed, grid fluctuation
+    ALERT_LOW:          2   # Background monitoring
+    ALERT_ACK:          2   # Acknowledgement
+    LINK_HEARTBEAT:     2   # Keep-alive
+    INVENTORY_SNAPSHOT: 3   # Daily stock updates
+    SENSOR_BATCH:       3   # Normal telemetry (default)
+
+  # ── Domain priority — sensor domain → base priority ──────────────────
+  # Used when a SENSOR_BATCH domain carries urgent data
+  domain_priority:
+    environment: 1    # CO, fire zone — life safety
+    energy:      2    # Generator, fuel, grid — operational critical
+    weather:     3    # Temperature, wind, pressure — routine
+    seismic:     4    # Background seismic — low urgency
+    logistics:   3    # Inventory — routine
+
+  # ── Quality-based priority bump ───────────────────────────────────────
+  # When sensor quality is not NOMINAL, priority is bumped up by this amount
+  quality_priority_bump:
+    SUSPECT: 1    # Bump priority up by 1 (e.g. 3 → 2)
+    FAILED:  0    # FAILED data gets priority 0 — must investigate
+
+  # ── Bandwidth-aware sending thresholds ───────────────────────────────
+  # Network quality % → max priority level allowed to send
+  # (items with priority > max_priority are held back)
+  bandwidth_thresholds:
+    good:        { min_pct: 80, max_priority: 4 }   # Send everything
+    medium:      { min_pct: 40, max_priority: 3 }   # Hold seismic/low
+    slow:        { min_pct: 10, max_priority: 2 }   # Only alerts + energy
+    critical:    { min_pct: 0,  max_priority: 1 }   # Only CRITICAL alerts + black box
 
 # -----------------------------------------------------------------------
 # Local API Authentication (offline-capable pre-provisioned keys)
@@ -58,6 +87,12 @@ sensors:
     sampling_interval_s: 10
     nominal_min: 0.0
     nominal_max: 100.0
+    calibration:
+      offset: 0.0
+      scale: 1.0
+      stuck_threshold: 0.01
+      stuck_window_readings: 20
+      max_rate_per_reading: 5.0
 
   - sensor_id: maitri.energy.gen1.power_output_kw
     domain: energy
@@ -67,6 +102,12 @@ sensors:
     sampling_interval_s: 10
     nominal_min: 0.0
     nominal_max: 150.0
+    calibration:
+      offset: 0.0
+      scale: 1.0
+      stuck_threshold: 0.1
+      stuck_window_readings: 20
+      max_rate_per_reading: 50.0
 
   - sensor_id: maitri.energy.gen1.fuel_consumption_lph
     domain: energy
@@ -76,6 +117,12 @@ sensors:
     sampling_interval_s: 10
     nominal_min: 0.0
     nominal_max: 30.0
+    calibration:
+      offset: 0.0
+      scale: 1.0
+      stuck_threshold: 0.01
+      stuck_window_readings: 20
+      max_rate_per_reading: 10.0
 
   - sensor_id: maitri.energy.gen1.oil_pressure_bar
     domain: energy
@@ -85,6 +132,12 @@ sensors:
     sampling_interval_s: 10
     nominal_min: 3.0
     nominal_max: 6.0
+    calibration:
+      offset: 0.0
+      scale: 1.0
+      stuck_threshold: 0.01
+      stuck_window_readings: 20
+      max_rate_per_reading: 1.0
 
   - sensor_id: maitri.energy.gen1.coolant_temp_c
     domain: energy
@@ -94,6 +147,12 @@ sensors:
     sampling_interval_s: 10
     nominal_min: 70.0
     nominal_max: 100.0
+    calibration:
+      offset: 0.0
+      scale: 1.0
+      stuck_threshold: 0.1
+      stuck_window_readings: 20
+      max_rate_per_reading: 5.0
 
   - sensor_id: maitri.energy.gen1.status
     domain: energy
@@ -101,6 +160,12 @@ sensors:
     metric_name: generator_status
     unit: enum  # 0=OFF, 1=RUNNING, 2=FAULT
     sampling_interval_s: 10
+    calibration:
+      offset: 0.0
+      scale: 1.0
+      stuck_threshold: 0.0
+      stuck_window_readings: 0
+      max_rate_per_reading: 2.0
 
   # Energy — Generator 2 (backup)
   - sensor_id: maitri.energy.gen2.fuel_pct
@@ -111,6 +176,12 @@ sensors:
     sampling_interval_s: 10
     nominal_min: 0.0
     nominal_max: 100.0
+    calibration:
+      offset: 0.0
+      scale: 1.0
+      stuck_threshold: 0.01
+      stuck_window_readings: 20
+      max_rate_per_reading: 5.0
 
   - sensor_id: maitri.energy.gen2.power_output_kw
     domain: energy
@@ -120,6 +191,12 @@ sensors:
     sampling_interval_s: 10
     nominal_min: 0.0
     nominal_max: 150.0
+    calibration:
+      offset: 0.0
+      scale: 1.0
+      stuck_threshold: 0.1
+      stuck_window_readings: 20
+      max_rate_per_reading: 50.0
 
   - sensor_id: maitri.energy.gen2.status
     domain: energy
@@ -127,6 +204,12 @@ sensors:
     metric_name: generator_status
     unit: enum
     sampling_interval_s: 10
+    calibration:
+      offset: 0.0
+      scale: 1.0
+      stuck_threshold: 0.0
+      stuck_window_readings: 0
+      max_rate_per_reading: 2.0
 
   # Energy — Power distribution
   - sensor_id: maitri.energy.grid.total_load_kw
@@ -137,6 +220,12 @@ sensors:
     sampling_interval_s: 10
     nominal_min: 0.0
     nominal_max: 200.0
+    calibration:
+      offset: 0.0
+      scale: 1.0
+      stuck_threshold: 0.5
+      stuck_window_readings: 20
+      max_rate_per_reading: 60.0
 
   # Weather
   - sensor_id: maitri.weather.aws.ambient_temp_c
@@ -147,6 +236,12 @@ sensors:
     sampling_interval_s: 60
     nominal_min: -60.0
     nominal_max: 10.0
+    calibration:
+      offset: 0.0
+      scale: 1.0
+      stuck_threshold: 0.05
+      stuck_window_readings: 10
+      max_rate_per_reading: 5.0
 
   - sensor_id: maitri.weather.aws.wind_speed_ms
     domain: weather
@@ -156,6 +251,12 @@ sensors:
     sampling_interval_s: 60
     nominal_min: 0.0
     nominal_max: 80.0
+    calibration:
+      offset: 0.0
+      scale: 1.0
+      stuck_threshold: 0.1
+      stuck_window_readings: 10
+      max_rate_per_reading: 20.0
 
   - sensor_id: maitri.weather.aws.wind_direction_deg
     domain: weather
@@ -165,6 +266,12 @@ sensors:
     sampling_interval_s: 60
     nominal_min: 0.0
     nominal_max: 360.0
+    calibration:
+      offset: 0.0
+      scale: 1.0
+      stuck_threshold: 0.5
+      stuck_window_readings: 10
+      max_rate_per_reading: 90.0
 
   - sensor_id: maitri.weather.aws.pressure_hpa
     domain: weather
@@ -174,6 +281,12 @@ sensors:
     sampling_interval_s: 60
     nominal_min: 950.0
     nominal_max: 1040.0
+    calibration:
+      offset: 0.0
+      scale: 1.0
+      stuck_threshold: 0.05
+      stuck_window_readings: 10
+      max_rate_per_reading: 5.0
 
   - sensor_id: maitri.weather.aws.humidity_pct
     domain: weather
@@ -183,6 +296,12 @@ sensors:
     sampling_interval_s: 60
     nominal_min: 0.0
     nominal_max: 100.0
+    calibration:
+      offset: 0.0
+      scale: 1.0
+      stuck_threshold: 0.1
+      stuck_window_readings: 10
+      max_rate_per_reading: 10.0
 
   - sensor_id: maitri.weather.aws.visibility_km
     domain: weather
@@ -192,6 +311,12 @@ sensors:
     sampling_interval_s: 60
     nominal_min: 0.0
     nominal_max: 50.0
+    calibration:
+      offset: 0.0
+      scale: 1.0
+      stuck_threshold: 0.1
+      stuck_window_readings: 10
+      max_rate_per_reading: 10.0
 
   # Environment — Air quality (main building)
   - sensor_id: maitri.environment.aq1.co2_ppm
@@ -202,6 +327,12 @@ sensors:
     sampling_interval_s: 60
     nominal_min: 350.0
     nominal_max: 1500.0
+    calibration:
+      offset: 0.0
+      scale: 1.0
+      stuck_threshold: 1.0
+      stuck_window_readings: 10
+      max_rate_per_reading: 200.0
 
   - sensor_id: maitri.environment.aq1.co_ppm
     domain: environment
@@ -211,6 +342,12 @@ sensors:
     sampling_interval_s: 60
     nominal_min: 0.0
     nominal_max: 35.0  # OSHA PEL
+    calibration:
+      offset: 0.0
+      scale: 1.0
+      stuck_threshold: 0.1
+      stuck_window_readings: 10
+      max_rate_per_reading: 10.0
 
   - sensor_id: maitri.environment.aq1.pm25_ugm3
     domain: environment
@@ -220,6 +357,12 @@ sensors:
     sampling_interval_s: 60
     nominal_min: 0.0
     nominal_max: 35.0
+    calibration:
+      offset: 0.0
+      scale: 1.0
+      stuck_threshold: 0.1
+      stuck_window_readings: 10
+      max_rate_per_reading: 15.0
 
   # Environment — Fire detection (zones 1-3)
   - sensor_id: maitri.environment.fire_z1.state
@@ -228,6 +371,12 @@ sensors:
     metric_name: fire_state
     unit: enum  # 0=CLEAR, 1=ACTIVE, 2=FAULT
     sampling_interval_s: 10
+    calibration:
+      offset: 0.0
+      scale: 1.0
+      stuck_threshold: 0.0
+      stuck_window_readings: 0
+      max_rate_per_reading: 2.0
 
   - sensor_id: maitri.environment.fire_z2.state
     domain: environment
@@ -235,6 +384,12 @@ sensors:
     metric_name: fire_state
     unit: enum
     sampling_interval_s: 10
+    calibration:
+      offset: 0.0
+      scale: 1.0
+      stuck_threshold: 0.0
+      stuck_window_readings: 0
+      max_rate_per_reading: 2.0
 
   - sensor_id: maitri.environment.fire_z3.state
     domain: environment
@@ -242,6 +397,12 @@ sensors:
     metric_name: fire_state
     unit: enum
     sampling_interval_s: 10
+    calibration:
+      offset: 0.0
+      scale: 1.0
+      stuck_threshold: 0.0
+      stuck_window_readings: 0
+      max_rate_per_reading: 2.0
 
   # Environment — Seismic
   - sensor_id: maitri.environment.seismic.magnitude
@@ -252,6 +413,12 @@ sensors:
     sampling_interval_s: 1  # event-driven; 0.0 between events
     nominal_min: 0.0
     nominal_max: 10.0
+    calibration:
+      offset: 0.0
+      scale: 1.0
+      stuck_threshold: 0.0
+      stuck_window_readings: 0
+      max_rate_per_reading: 5.0
 
 # -----------------------------------------------------------------------
 # Alert threshold rules

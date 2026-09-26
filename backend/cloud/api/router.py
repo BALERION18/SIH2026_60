@@ -21,6 +21,7 @@ Endpoints:
 """
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
@@ -93,43 +94,51 @@ def _compute_inventory_status(item: InventoryItem) -> str:
 async def get_dashboard(
     session: AsyncSession = Depends(get_db_session),
 ) -> DashboardSummaryOut:
-    """Return global health summary across all stations."""
-    cfg = get_config()
-    station_outs = []
-    total_critical = total_high = total_open = 0
+    """Return global health summary across all stations.
 
-    for sid in cfg.station_ids:
-        conn_result = await session.execute(
+    All per-station DB queries run in parallel via asyncio.gather()
+    instead of sequentially, reducing dashboard load time significantly
+    when the DB is remote (e.g. Neon cloud PostgreSQL).
+    """
+    cfg = get_config()
+
+    async def _fetch_station(sid: str):
+        """Fetch all data for one station in parallel sub-queries."""
+        conn_q = session.execute(
             select(StationConnection).where(StationConnection.station_id == sid)
         )
-        conn = conn_result.scalar_one_or_none()
-
-        for sev, target in [("CRITICAL", "critical"), ("HIGH", "high")]:
-            cnt_result = await session.execute(
-                select(func.count(Alert.alert_id))
-                .where(Alert.station_id == sid)
-                .where(Alert.severity == sev)
-                .where(Alert.ack_state != "RESOLVED")
-            )
-            n = cnt_result.scalar_one() or 0
-            if sev == "CRITICAL":
-                total_critical += n
-            else:
-                total_high += n
-
-        total_result = await session.execute(
+        critical_q = session.execute(
+            select(func.count(Alert.alert_id))
+            .where(Alert.station_id == sid)
+            .where(Alert.severity == "CRITICAL")
+            .where(Alert.ack_state != "RESOLVED")
+        )
+        high_q = session.execute(
+            select(func.count(Alert.alert_id))
+            .where(Alert.station_id == sid)
+            .where(Alert.severity == "HIGH")
+            .where(Alert.ack_state != "RESOLVED")
+        )
+        total_q = session.execute(
             select(func.count(Alert.alert_id))
             .where(Alert.station_id == sid)
             .where(Alert.ack_state != "RESOLVED")
         )
-        total_open += total_result.scalar_one() or 0
+        # All 4 queries for this station run in parallel
+        conn_res, crit_res, high_res, total_res = await asyncio.gather(
+            conn_q, critical_q, high_q, total_q
+        )
+        conn = conn_res.scalar_one_or_none()
+        n_critical = crit_res.scalar_one() or 0
+        n_high = high_res.scalar_one() or 0
+        n_total = total_res.scalar_one() or 0
 
         if conn:
             minutes_since = None
             if conn.last_heartbeat_at:
                 delta = utcnow() - conn.last_heartbeat_at.replace(tzinfo=timezone.utc)
                 minutes_since = delta.total_seconds() / 60
-            station_outs.append(StationConnectionOut(
+            station_out = StationConnectionOut(
                 station_id=sid,
                 display_name=_station_display(sid),
                 link_state=conn.link_state,
@@ -139,9 +148,9 @@ async def get_dashboard(
                 open_high_alerts=conn.open_high_alerts,
                 services_healthy=conn.services_healthy,
                 minutes_since_heartbeat=minutes_since,
-            ))
+            )
         else:
-            station_outs.append(StationConnectionOut(
+            station_out = StationConnectionOut(
                 station_id=sid,
                 display_name=_station_display(sid),
                 link_state="DOWN",
@@ -151,7 +160,19 @@ async def get_dashboard(
                 open_high_alerts=None,
                 services_healthy=None,
                 minutes_since_heartbeat=None,
-            ))
+            )
+        return station_out, n_critical, n_high, n_total
+
+    # All stations fetched in parallel
+    results = await asyncio.gather(*[_fetch_station(sid) for sid in cfg.station_ids])
+
+    station_outs = []
+    total_critical = total_high = total_open = 0
+    for station_out, n_crit, n_high, n_total in results:
+        station_outs.append(station_out)
+        total_critical += n_crit
+        total_high += n_high
+        total_open += n_total
 
     return DashboardSummaryOut(
         stations=station_outs,
@@ -346,6 +367,7 @@ async def get_latest_sensors(
             latest_unit=r.unit,
             latest_ts=r.timestamp_utc,
             readings_count_24h=counts.get(sensor_id, 0),
+            quality=r.quality if hasattr(r, 'quality') else None,
         ))
     return sorted(out, key=lambda x: x.sensor_id)
 

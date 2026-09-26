@@ -64,6 +64,7 @@ class SyncAgent:
         self._signer: Optional[Signer] = None
         self._sequence: int = 0
         self._link_state: str = "DOWN"
+        self._last_latency_ms: Optional[float] = None  # updated by heartbeat loop
         self._task: Optional[asyncio.Task] = None
         self._heartbeat_task: Optional[asyncio.Task] = None
         self._running = False
@@ -112,16 +113,59 @@ class SyncAgent:
                 self._heartbeat_task.cancel()
 
     async def _flush_loop(self) -> None:
-        """Continuously dequeue and publish while connected."""
+        """Continuously dequeue and publish while connected.
+
+        Network quality (network_pct) is estimated from heartbeat latency:
+          - No latency data yet            → assume 100% (good)
+          - latency <= 500ms               → good   (80-100%)
+          - latency <= 1500ms              → medium (40-79%)
+          - latency <= 4000ms              → slow   (10-39%)
+          - latency >  4000ms or timeout   → critical (0-9%)
+
+        network_pct is passed to dequeue_batch() so only eligible-priority
+        items are dequeued and sent under constrained bandwidth.
+        """
         while self._running:
             try:
-                items = await self._queue.dequeue_batch(self._batch_size)
+                network_pct = self._estimate_network_pct()
+                items = await self._queue.dequeue_batch(
+                    self._batch_size,
+                    network_pct=network_pct,
+                )
+                if items:
+                    log.info(
+                        "edge.sync_agent.flush_batch",
+                        count=len(items),
+                        network_pct=network_pct,
+                        max_priority=self._queue.max_priority_for_bandwidth(network_pct),
+                    )
                 for item in items:
                     await self._publish_item(item)
             except Exception as exc:
                 log.error("edge.sync_agent.flush_error", error=str(exc))
                 await self._record_link_state("DEGRADED")
             await asyncio.sleep(self._flush_interval_s)
+
+    def _estimate_network_pct(self) -> float:
+        """Estimate network quality as a percentage from recent latency_ms.
+
+        Thresholds:
+          <= 500ms   → 90%  (good)
+          <= 1500ms  → 60%  (medium)
+          <= 4000ms  → 25%  (slow)
+          >  4000ms  → 5%   (critical)
+          No data    → 100% (assume good until proven otherwise)
+        """
+        if self._last_latency_ms is None:
+            return 100.0
+        ms = self._last_latency_ms
+        if ms <= 500:
+            return 90.0
+        if ms <= 1500:
+            return 60.0
+        if ms <= 4000:
+            return 25.0
+        return 5.0
 
     async def _publish_item(self, item: Dict[str, Any]) -> None:
         """Wrap one queue item in a SyncEnvelope and publish over MQTT."""
@@ -150,20 +194,34 @@ class SyncAgent:
             raise
 
     async def _heartbeat_loop(self) -> None:
-        """Publish link heartbeat every heartbeat_interval_s seconds."""
+        """Publish link heartbeat and measure round-trip latency for bandwidth estimation."""
         while self._running:
             try:
                 depth = await self._queue.queue_depth()
+                network_pct = self._estimate_network_pct()
                 hb = json.dumps({
                     "station_id": self._station_id,
                     "timestamp_utc": utcnow().isoformat(),
                     "link_state": self._link_state,
                     "queue_depth": depth,
                     "sequence": self._sequence,
+                    "network_pct": network_pct,
                 })
+                # Measure publish latency as proxy for network quality
+                t0 = asyncio.get_event_loop().time()
                 await self._mqtt.publish_heartbeat(hb)
-                log.debug("edge.sync_agent.heartbeat_sent", queue_depth=depth)
+                latency_ms = (asyncio.get_event_loop().time() - t0) * 1000
+                self._last_latency_ms = latency_ms
+
+                log.debug(
+                    "edge.sync_agent.heartbeat_sent",
+                    queue_depth=depth,
+                    latency_ms=round(latency_ms, 1),
+                    network_pct=network_pct,
+                )
             except Exception as exc:
+                # On failure assume worst-case network
+                self._last_latency_ms = 9999.0
                 log.error("edge.sync_agent.heartbeat_error", error=str(exc))
             await asyncio.sleep(self._heartbeat_interval_s)
 

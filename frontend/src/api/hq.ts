@@ -55,6 +55,7 @@ export interface SensorSummary {
   latest_unit: string | null
   latest_ts: string | null
   readings_count_24h: number
+  quality?: 'NOMINAL' | 'SUSPECT' | 'FAILED'
 }
 
 export interface AnalyticsOut {

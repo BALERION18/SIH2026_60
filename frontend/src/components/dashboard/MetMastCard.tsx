@@ -1,6 +1,7 @@
 import { useSensors } from '../../hooks/useSensors'
 import { useLanguage } from '../../context/LanguageContext'
 import type { SensorSummary } from '../../api/hq'
+import QualityBadge from '../ui/QualityBadge'
 
 interface Props { stationId: string }
 
@@ -28,6 +29,7 @@ export default function MetMastCard({ stationId }: Props) {
       value: fmtVal(windSpd, 1, 'km/h'),
       sub: (windSpd?.latest_value ?? 0) > 30 ? 'Strong Breeze' : 'Moderate',
       color: (windSpd?.latest_value ?? 0) > 30 ? '#ea580c' : '#0b3b60',
+      quality: windSpd?.quality,
     },
     {
       icon: 'explore',
@@ -35,6 +37,7 @@ export default function MetMastCard({ stationId }: Props) {
       value: fmtVal(windDir, 0, '°'),
       sub: '247° WSW Azimuth',
       color: '#0b3b60',
+      quality: windDir?.quality,
     },
     {
       icon: 'speed',
@@ -42,6 +45,7 @@ export default function MetMastCard({ stationId }: Props) {
       value: fmtVal(pressure, 0, 'hPa'),
       sub: 'Normal Barometric',
       color: '#0b3b60',
+      quality: pressure?.quality,
     },
     {
       icon: 'wb_sunny',
@@ -49,6 +53,7 @@ export default function MetMastCard({ stationId }: Props) {
       value: fmtVal(solarRad, 0, 'W/m²'),
       sub: 'Polar Daylight Flux',
       color: '#0b3b60',
+      quality: solarRad?.quality,
     },
   ]
 
@@ -104,12 +109,12 @@ export default function MetMastCard({ stationId }: Props) {
 
       {/* Sensor Grid */}
       <div style={{ flex: 1, padding: '10px 12px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, background: '#f8fafc' }}>
-        {metrics.map(({ icon, label, value, sub, color }) => (
+        {metrics.map(({ icon, label, value, sub, color, quality }) => (
           <div
             key={label}
             style={{
               background: '#ffffff',
-              border: '1px solid #e2e8f0',
+              border: `1px solid ${quality === 'FAILED' ? '#fecaca' : quality === 'SUSPECT' ? '#fde68a' : '#e2e8f0'}`,
               padding: '7px 10px',
               display: 'flex',
               flexDirection: 'column',
@@ -128,8 +133,9 @@ export default function MetMastCard({ stationId }: Props) {
             <div style={{ fontSize: 15, fontWeight: 800, color, fontFamily: 'Inter', letterSpacing: '-0.01em' }}>
               {value}
             </div>
-            <div style={{ fontSize: 8.5, fontWeight: 600, color: '#64748b', marginTop: 1 }}>
-              {sub}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 }}>
+              <div style={{ fontSize: 8.5, fontWeight: 600, color: '#64748b' }}>{sub}</div>
+              <QualityBadge quality={quality} size="sm" />
             </div>
           </div>
         ))}
@@ -149,7 +155,18 @@ export default function MetMastCard({ stationId }: Props) {
         }}
       >
         <span>● Sensor Calibrated • 10m Tower</span>
-        <span style={{ color: '#15803d', fontWeight: 700 }}>✓ IMD Certified</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          {[windSpd, windDir, pressure, solarRad].some(s => s?.quality === 'FAILED') && (
+            <QualityBadge quality="FAILED" size="sm" />
+          )}
+          {[windSpd, windDir, pressure, solarRad].some(s => s?.quality === 'SUSPECT') && (
+            <QualityBadge quality="SUSPECT" size="sm" />
+          )}
+          {[windSpd, windDir, pressure, solarRad].every(s => !s || s?.quality === 'NOMINAL') && (
+            <QualityBadge quality="NOMINAL" size="sm" />
+          )}
+          <span style={{ color: '#15803d', fontWeight: 700 }}>✓ IMD Certified</span>
+        </div>
       </div>
     </div>
   )
